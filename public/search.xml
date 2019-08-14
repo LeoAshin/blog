@@ -1,0 +1,419 @@
+<?xml version="1.0" encoding="utf-8"?>
+<search> 
+  
+  
+    
+    <entry>
+      <title>Mysql5.7+ 关于Json的处理 - 牢骚向</title>
+      <link href="/2019/08/14/Mysql5-7%E5%85%B3%E4%BA%8EJson%E7%9A%84%E5%A4%84%E7%90%86/"/>
+      <url>/2019/08/14/Mysql5-7%E5%85%B3%E4%BA%8EJson%E7%9A%84%E5%A4%84%E7%90%86/</url>
+      
+        <content type="html"><![CDATA[<p>最近在对数据库处理的时候, 遇到关于 Json 类型. 从 Sql 上来看, json 相关函数的加入对与现有的很多数据结构都是非常友好的<br>其中用的比较多的函数包裹</p><figure class="highlight sql hljs"><table><tr><td class="code"><pre><span class="line">JSON_SEARCH()</span><br><span class="line">JSON_EXTRACT()</span><br></pre></td></tr></table></figure><p><code>JSON_SEARCH</code> 函数用于检索某列下的某个特定 key 值的位置信息.但是不能获得具体的对象<br><code>JSON_EXTRACT</code> 函数根据具体的 json 索引可以获取整个 json 对象, 例如 JsonArray 中的某个元素</p><p>但是两者联合使用的效果, 暂时没有实验出满意的结果</p><p>但是, 目前主流框架, 以及哪怕 jdbc 对于 json 的支持并不是很友好.</p> <a id="more"></a><p>拿最主流的 Mybatis 与 Hibernate 来举例子:</p><h3 id="Mybatis"><a href="#Mybatis" class="headerlink" title="Mybatis"></a>Mybatis</h3><p>要在 Mybatis 实现对 Json 的解析, 需要继承 Mybatis 的 <code>TypeHandler</code> 接口</p><figure class="highlight java hljs"><table><tr><td class="code"><pre><span class="line"><span class="hljs-keyword">public</span> <span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">MyHander</span>&lt;<span class="hljs-title">T</span>&gt; <span class="hljs-keyword">extends</span> <span class="hljs-title">BaseTypeHandler</span>&lt;<span class="hljs-title">T</span>&gt;</span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-title">MyHandler</span><span class="hljs-params">(Class&lt;T&gt; clazz)</span></span>&#123;</span><br><span class="line">        ...</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">     <span class="hljs-meta">@Override</span></span><br><span class="line">    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title">setNonNullParameter</span><span class="hljs-params">(PreparedStatement ps, <span class="hljs-keyword">int</span> i, T parameter, JdbcType jdbcType)</span> <span class="hljs-keyword">throws</span> SQLException </span>&#123;</span><br><span class="line">        ps.setString(i, <span class="hljs-keyword">this</span>.toJson(parameter));</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="hljs-meta">@Override</span></span><br><span class="line">    <span class="hljs-function"><span class="hljs-keyword">public</span> T <span class="hljs-title">getNullableResult</span><span class="hljs-params">(ResultSet rs, String columnName)</span> <span class="hljs-keyword">throws</span> SQLException </span>&#123;</span><br><span class="line">        <span class="hljs-keyword">return</span> <span class="hljs-keyword">this</span>.toObject(rs.getString(columnName), clazz);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="hljs-meta">@Override</span></span><br><span class="line">    <span class="hljs-function"><span class="hljs-keyword">public</span> T <span class="hljs-title">getNullableResult</span><span class="hljs-params">(ResultSet rs, <span class="hljs-keyword">int</span> columnIndex)</span> <span class="hljs-keyword">throws</span> SQLException </span>&#123;</span><br><span class="line">        <span class="hljs-keyword">return</span> <span class="hljs-keyword">this</span>.toObject(rs.getString(columnIndex), clazz);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="hljs-meta">@Override</span></span><br><span class="line">    <span class="hljs-function"><span class="hljs-keyword">public</span> T <span class="hljs-title">getNullableResult</span><span class="hljs-params">(CallableStatement cs, <span class="hljs-keyword">int</span> columnIndex)</span> <span class="hljs-keyword">throws</span> SQLException </span>&#123;</span><br><span class="line">        <span class="hljs-keyword">return</span> <span class="hljs-keyword">this</span>.toObject(cs.getString(columnIndex), clazz);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="hljs-function"><span class="hljs-keyword">private</span> String <span class="hljs-title">toJson</span><span class="hljs-params">(T object)</span> </span>&#123;</span><br><span class="line">        <span class="hljs-keyword">try</span> &#123;</span><br><span class="line">            <span class="hljs-keyword">return</span> mapper.writeValueAsString(object);</span><br><span class="line">        &#125; <span class="hljs-keyword">catch</span> (Exception e) &#123;</span><br><span class="line">            <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> RuntimeException(e);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="hljs-function"><span class="hljs-keyword">private</span> T <span class="hljs-title">toObject</span><span class="hljs-params">(String content, Class&lt;?&gt; clazz)</span> </span>&#123;</span><br><span class="line">        <span class="hljs-keyword">if</span> (content != <span class="hljs-keyword">null</span> &amp;&amp; !content.isEmpty()) &#123;</span><br><span class="line">            <span class="hljs-keyword">try</span> &#123;</span><br><span class="line">                <span class="hljs-keyword">return</span> (T) mapper.readValue(content, clazz);</span><br><span class="line">            &#125; <span class="hljs-keyword">catch</span> (Exception e) &#123;</span><br><span class="line">                <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> RuntimeException(e);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125; <span class="hljs-keyword">else</span> &#123;</span><br><span class="line">            <span class="hljs-keyword">return</span> <span class="hljs-keyword">null</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="hljs-keyword">static</span> &#123;</span><br><span class="line">        mapper.configure(Feature.WRITE_NULL_MAP_VALUES, <span class="hljs-keyword">false</span>);</span><br><span class="line">        mapper.setSerializationInclusion(Inclusion.NON_NULL);</span><br><span class="line">    &#125;</span><br><span class="line">    ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure><p>实现之后还需要在 Mapper 中像注解或者 xml 配置文件中, 对相对应的字段进行类型描述.</p><p>总之就是步骤很麻烦的实现</p><h3 id="Hibernate-dslquery"><a href="#Hibernate-dslquery" class="headerlink" title="Hibernate - dslquery"></a>Hibernate - dslquery</h3><p>目前利用 hibernate 也是基于 dslquery 实现的一套框架, 不考虑性能上来说, 对于 json 的查询还是很方便的, 因为只需要</p><p>注解声明是 @type(json)之后, 就可以直接存储. 但是确不支持单个的读取.</p><p>也就是说, 我只能通过写源生 sql 来查明我所需要数据的列, 然后再把整条列都查出来, 在对其进行一个筛选.</p><p>这一点在业务规范和小数据量的时候, 是没有问题的.</p><p>至少在代码书写上, 算是最省心的一种了</p><figure class="highlight java hljs"><table><tr><td class="code"><pre><span class="line"><span class="hljs-meta">@Query</span>(value = <span class="hljs-string">"select apply_code from credit_application_status where to_be_processed is not null and to_be_processed -&gt;</span></span><br><span class="line"><span class="hljs-string"> '$[*].handler'  like concat('%', :handler, '%') or to_be_processed -&gt; '$[*].position' like concat('%', :position, '%')"</span>, nativeQuery = <span class="hljs-keyword">true</span>)</span><br><span class="line">   <span class="hljs-function">List&lt;String&gt; <span class="hljs-title">toBeProcessedTaskId</span><span class="hljs-params">(@Param(value = <span class="hljs-string">"handler"</span>)</span> String username, @<span class="hljs-title">Param</span><span class="hljs-params">(value = <span class="hljs-string">"position"</span>)</span> String position)</span>;</span><br></pre></td></tr></table></figure><p>但是目前, 除了自己实现以外, 没有其它更好的方法来实现对于 json 的高效且省心的操作.</p><p>有时候, 还不如直接存入 json 字符串操作来的方便.</p><p><code>json 数据类型需谨慎使用</code></p>]]></content>
+      
+      
+      <categories>
+          
+          <category> Back-End </category>
+          
+      </categories>
+      
+      
+        <tags>
+            
+            <tag> Java </tag>
+            
+            <tag> Mysql </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+    
+    <entry>
+      <title>Hexo主题 icarus 添加异步刷新-pjax</title>
+      <link href="/2019/08/11/Hexo%E4%B8%BB%E9%A2%98%E6%B7%BB%E5%8A%A0%E5%BC%82%E6%AD%A5%E5%88%B7%E6%96%B0-pjax/"/>
+      <url>/2019/08/11/Hexo%E4%B8%BB%E9%A2%98%E6%B7%BB%E5%8A%A0%E5%BC%82%E6%AD%A5%E5%88%B7%E6%96%B0-pjax/</url>
+      
+        <content type="html"><![CDATA[<p>这两天更新Blog的时候,找到一个很好用的主题, 也就是现在这款:</p><blockquote><p> <a href="https://github.com/ppoffice/hexo-theme-icarus" target="_blank" rel="noopener">A simple, delicate, and modern theme for the static site generator Hexo. </a></p></blockquote><p>也可通过右下角footer中的github图标进入.</p><p>但是原版的刷新模式是基于同步刷新, 无论点什么链接都会整屏刷新会导致浏览器整个页面闪一下, 感受很不好, 遂寻找异步刷新的解决方案.</p><a id="more"></a><p>经过一番搜索后, pjax进入了眼帘</p><blockquote><p>  <a href="https://github.com/defunkt/jquery-pjax" target="_blank" rel="noopener">GitHub: pushState + ajax = pjax</a></p></blockquote><p>将引入代码添加到项目中正确到位置. 如果和我一样对前端比较生疏的人记得找准位置, 加载位置要在jquery 后面</p><figure class="highlight html hljs"><table><tr><td class="code"><pre><span class="line"><span class="hljs-tag">&lt;<span class="hljs-name">script</span> <span class="hljs-attr">src</span>=<span class="hljs-string">"//cdn.bootcss.com/jquery.pjax/2.0.1/jquery.pjax.min.js"</span>&gt;</span><span class="hljs-undefined"></span><span class="hljs-tag">&lt;/<span class="hljs-name">script</span>&gt;</span></span><br></pre></td></tr></table></figure><p>在 icarus 中, 我是将其放在了 <code>scrips.ejs</code> 中, 也就是刚好在 jquery 引入后</p><p>当然也可以通过npm</p><blockquote><p>$ npm install jquery-pjax</p></blockquote><p>等其它方式引入</p><p><img src="/2019/08/11/Hexo主题添加异步刷新-pjax/1.png" alt="scripts.ejs"></p><p>引入之后, 在找到对应的容器div, 即主体内容的加载容器对其进行全局唯一ID的定义<br>在 icarus 中, 是 <code>layout.ejs</code></p><p><img src="/2019/08/11/Hexo主题添加异步刷新-pjax/2.png" alt="layout.ejs"></p><p>将在包裹着 <code>&lt;- body -&gt;</code> 的div  声明一个Id</p><p>最后, 在 <code>main.js</code> 中初始化 pjax, 具体在哪声明, 根据不同主题的主函数定义位置</p><figure class="highlight javascript hljs"><table><tr><td class="code"><pre><span class="line">$(<span class="hljs-built_in">document</span>).pjax(<span class="hljs-string">'a'</span>, <span class="hljs-string">'#pjax-container'</span>, &#123;</span><br><span class="line">    fragment: <span class="hljs-string">'#pjax-container'</span>,</span><br><span class="line">    timeout: <span class="hljs-number">5000</span>,</span><br><span class="line">    cache: <span class="hljs-literal">false</span></span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure><p><img src="/2019/08/11/Hexo主题添加异步刷新-pjax/3.png" alt="main.js"></p><p>至此, 异步刷新界面达成</p>]]></content>
+      
+      
+      <categories>
+          
+          <category> Coder </category>
+          
+      </categories>
+      
+      
+        <tags>
+            
+            <tag> Hexo </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+    
+    <entry>
+      <title>Mac 常用软件介绍</title>
+      <link href="/2019/08/10/Mac-%E5%B8%B8%E7%94%A8%E8%BD%AF%E4%BB%B6%E4%BB%8B%E7%BB%8D/"/>
+      <url>/2019/08/10/Mac-%E5%B8%B8%E7%94%A8%E8%BD%AF%E4%BB%B6%E4%BB%8B%E7%BB%8D/</url>
+      
+        <content type="html"><![CDATA[<p>无聊来写写我经常用的一些 Mac 软件,其中包括一些通用的生活类软件和一些开发需要的软件</p>  <a id="more"></a><p>首当其冲的就是社交软件, 各大厂商对于 Mac 的支持已经非常源生了. 例如微信, QQ 等哪怕一些小众的软件<br>比如 YY 都有了比较好的支持, 所以有什么需要的软件直接去搜 Mac 版即可</p><h3 id="1-Alfred"><a href="#1-Alfred" class="headerlink" title="1. Alfred"></a>1. Alfred</h3><p>首先要推荐的就是这款搜索神器 <code>Alfre</code> 对于一般用户或者中度用户来说免费版已经能够获得非常好的体验了</p><blockquote><p>下载地址 <a href="https://www.alfredapp.com/" target="_blank" rel="noopener">Alfred 4 for Mac</a></p></blockquote><p>对于 Alfred 的重点推荐在于</p><ol><li><p>强大的索引, 即高效的快速的搜索本地文件能力, 只要你依稀记着某个文件的关键字, 就可以获得电脑上的一切结果.</p></li><li><p>Customized Query.</p></li></ol><p><img src="/2019/08/10/Mac-常用软件介绍/1.png" alt="query"></p><pre><code>设置好之后, 搜索的步骤再也不是, 打开浏览器 - 输入网址 - 选中输入框 - 输入内容了你只需要输入你设定的关键字 即可输入搜索内容, alfred会自行打开浏览器并去目标地址进行搜索,当然, 这也少不了前期设置</code></pre><ol start="3"><li>再者就是对于系统的高度契合,无论是打开 app, 还是运行脚本亦或者是进行快捷计算. 当你熟练之后,<br>一切都是那么的容易.</li></ol><h3 id="2-IINA"><a href="#2-IINA" class="headerlink" title="2. IINA"></a>2. IINA</h3><p>多媒体设备,当然少不了多媒体软件的支持, 作为目前 Mac 平台上最好用的播放软件, 不仅大小不超过 100G 更是从 UI 到功能, 都透露着为 Mac 打造的气息, 源生支持 PIP:画中画模式, 并且占用资源非常少.</p><p><img src="/2019/08/10/Mac-常用软件介绍/2.png" alt></p><blockquote><p>下载地址 <a href="https://iina.io/" target="_blank" rel="noopener">IINA - The modern media player for MacOS</a></p></blockquote><h3 id="3-iStat-Menu"><a href="#3-iStat-Menu" class="headerlink" title="3. iStat Menu"></a>3. iStat Menu</h3><div align="center">  <img src="/2019/08/10/Mac-常用软件介绍/3.png"></div><p>这是一款全局监控软件, 可以监控包括内存,CPU,硬盘读写, 网络传输, 传感器等绝大部分硬件的运行状态与温度, 并且本身占有资源很小, 不会像 Mac 本身自带的 Monitor 一样打开会高度占用 CPU 资源</p><div align="center">  <img src="/2019/08/10/Mac-常用软件介绍/4.png"></div><div align="center">  <img src="/2019/08/10/Mac-常用软件介绍/5.png"></div><div align="center">  <img src="/2019/08/10/Mac-常用软件介绍/6.png"></div><div align="center">  <img src="/2019/08/10/Mac-常用软件介绍/7.png"></div><blockquote><p>下载地址 <a href="https://bjango.com/mac/istatmenus/" target="_blank" rel="noopener">An advanced Mac system monitor to your menubar</a></p></blockquote><p>但是这个软件的完全版本是属于收费的. 请看左边(利益无关)</p><h3 id="4-Handshaker"><a href="#4-Handshaker" class="headerlink" title="4. Handshaker"></a>4. Handshaker</h3><p>曾经, 我为在 Mac 上如何传输 Android 手机文件以及管理操碎了心, 直到我看到了一家我并不喜欢的公司出的产品, 就是介绍的 Handshaker. 综合体验上来说<br>可以说是 Mac 上使用最省心的文件管理以及传输软件了. 对于这家公司. 不得不说,只要不是正业的产品线, 做的都挺好的</p><blockquote><p>下载地址 <a href="https://www.smartisan.com/apps/#/handshaker" target="_blank" rel="noopener">锤子软件 - Handshaker</a></p></blockquote><h3 id="5-Shadowsocks"><a href="#5-Shadowsocks" class="headerlink" title="5. Shadowsocks"></a>5. Shadowsocks</h3><div align="center">  <img src="/2019/08/10/Mac-常用软件介绍/8.png"></div><p>这是一款神秘的软件, 功能就不说了, 不知道哪里下载 请上 <a href="https://github.com" target="_blank" rel="noopener">Github</a></p><hr><h3 id="6-Another-Redis-Desktop-Manager"><a href="#6-Another-Redis-Desktop-Manager" class="headerlink" title="6. Another Redis Desktop Manager"></a>6. Another Redis Desktop Manager</h3><p>目前用过的体验最好的 Redis GUI 管理界面, 开源免费, 就是和 <a href="https://redisdesktop.com/" target="_blank" rel="noopener">Redis Desktop Manager</a> 对着干的</p><blockquote><p>下载地址<a href="https://appimage.github.io/Another_Redis_Desktop_Manager/" target="_blank" rel="noopener">Another Redis Desktop Manager</a></p></blockquote><p>不过建议下载之后, 改下名字, 名字真的太长了</p><div align="center">  <img src="/2019/08/10/Mac-常用软件介绍/9.png"></div><div align="center">  <img src="/2019/08/10/Mac-常用软件介绍/10.png"></div>]]></content>
+      
+      
+      <categories>
+          
+          <category> Share </category>
+          
+      </categories>
+      
+      
+        <tags>
+            
+            <tag> Mac </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+    
+    <entry>
+      <title>How&#39;s my desktop looks like?</title>
+      <link href="/2019/08/10/Hows-my-desktop-looks-like/"/>
+      <url>/2019/08/10/Hows-my-desktop-looks-like/</url>
+      
+        <content type="html"><![CDATA[<p>It’s a hard work to collect everything I liked and need.<br>But finally , mission completed<br>Next step is add my PC join in.</p><p><img src="/2019/08/10/Hows-my-desktop-looks-like/IMG_0200.jpg" alt="1"></p><p><img src="/2019/08/10/Hows-my-desktop-looks-like/WechatIMG1.jpeg" alt="6"></p><p><img src="/2019/08/10/Hows-my-desktop-looks-like/IMG_0208.jpg" alt="1"></p>]]></content>
+      
+      
+      <categories>
+          
+          <category> Posts </category>
+          
+      </categories>
+      
+      
+        <tags>
+            
+            <tag> Show </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+    
+    <entry>
+      <title>就这样吧,够了</title>
+      <link href="/2019/06/19/%E5%B0%B1%E8%BF%99%E6%A0%B7%E5%90%A7-%E5%A4%9F%E4%BA%86/"/>
+      <url>/2019/06/19/%E5%B0%B1%E8%BF%99%E6%A0%B7%E5%90%A7-%E5%A4%9F%E4%BA%86/</url>
+      
+        <content type="html"><![CDATA[<div align="center">  <img src="/2019/06/19/就这样吧-够了/1.jpg"></div>]]></content>
+      
+      
+      <categories>
+          
+          <category> Posts </category>
+          
+      </categories>
+      
+      
+    </entry>
+    
+    
+    
+    <entry>
+      <title>秒杀与拼团系统架构设计</title>
+      <link href="/2019/05/23/%E7%A7%92%E6%9D%80%E4%B8%8E%E6%8B%BC%E5%9B%A2%E7%B3%BB%E7%BB%9F%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/"/>
+      <url>/2019/05/23/%E7%A7%92%E6%9D%80%E4%B8%8E%E6%8B%BC%E5%9B%A2%E7%B3%BB%E7%BB%9F%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/</url>
+      
+        <content type="html"><![CDATA[<p>从业务上来看, 这两个系统有什么共同的特性呢?</p><ol><li><p>瞬时性<br> 用户了解活动时间后会在时间点周围记性大量的网络请求</p></li><li><p>用户数量限制<br> 并不是参与有将, 永远都只有固定的, 少量的用户可以获得最终的商品</p></li><li><p>产品数量限制<br> 获得的商品是有数量限制的</p> <a id="more"></a></li></ol><p>那么可能在活动开始的一瞬间,原本的QPS或者TPS 相对于普通时间段来说会以一个指数型增长.<br>那么如何提高系统的抗压能力以及保证业务的正确性成为系统设计的根本.</p><hr><p>我们首先来分析, 我们要解决什么问题.</p><p>假设现有一个秒杀活动吸引了20000个用户来参加, 那么最高并发理论值就是20000.<br>对于原有系统来说, 这个瞬时并发会击垮原有的服务, 导致所有业务瘫痪. 对系统和用户的留存都是致命的.</p><blockquote><ol><li>维护原有业务</li></ol></blockquote><p>用户会在活动开始前对网站或者特定页面会有突然性的高刷新的频率. 而如果按照一般的设计, 会对应用服务, 数据库访问<br>以及相对应页面资源服务造成极大的压力</p><blockquote><ol start="2"><li>应用数据库负载</li></ol></blockquote><p>如果一个用户页面大小是100K那么需要的网络和服务器贷款就是 2G= 100K * 20000. 带宽是很贵的. 没有任何一家公司会购买<br>高于平均使用量的带宽</p><blockquote><ol start="3"><li>带宽压力</li></ol></blockquote><p>很多情况下, 一个稍微有点计算机基础的人都可以通过html挖出很多网站的元素. 如果秒杀地址是暴露的, 那么很容易给这部分用户写成脚本来恶意竞争<br>或者对服务器进行攻击.</p><blockquote><ol start="4"><li>秒杀URL和下单业务流程</li></ol></blockquote><p>针对以上问题. 我们逐步来分析:</p><h3 id="秒杀系统独立部署"><a href="#秒杀系统独立部署" class="headerlink" title="秒杀系统独立部署"></a>秒杀系统独立部署</h3><p>由于秒杀服务于常规业务的流量有很大的不同, 为了维护原有的系统架构并且保护一半业务系统, 我们应当将秒杀业务独立的分离出. 并对其进行伸缩性部署和负载均衡.<br>如果需要, 可以对其使用独立域名. 这样即使秒杀系统奔溃了. 也可以让用户找得到投诉的地方</p><h3 id="秒杀页面优化"><a href="#秒杀页面优化" class="headerlink" title="秒杀页面优化"></a>秒杀页面优化</h3><p>如果是网页,并且原有的页面是通过动态生成的. 那么这部分的页面, 我们需要对其进行静态化, 并且将页面提前写入缓存当中. 并且对其中的一些数据进行写死或者直接写<br>在缓存中, 减少并发时对于数据库的负载. 并对静态资源进行CDN部署, 保证用户访问速率</p><h3 id="活动带宽"><a href="#活动带宽" class="headerlink" title="活动带宽"></a>活动带宽</h3><p>活动之前不要忘记提前租借带宽哦. 不然因为带宽不够影响业务就尴尬了</p><h3 id="动态URL"><a href="#动态URL" class="headerlink" title="动态URL"></a>动态URL</h3><p>为了避免用户直接下单. URL应该是动态的. 每次产生生成订单的行为之后, 应该由服务器生成一个带随机数的URL来给用户指向订单支付页面.</p><p>整个系统大致如下</p><p><img src="/2019/05/23/秒杀与拼团系统架构设计/2.png" alt="设计图"></p><p>其中还有很多针对不同场景或者平台的一些优化. 待续</p>]]></content>
+      
+      
+      <categories>
+          
+          <category> Back-End </category>
+          
+      </categories>
+      
+      
+        <tags>
+            
+            <tag> 高并发 </tag>
+            
+            <tag> 系统设计 </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+    
+    <entry>
+      <title>关于面试中系统设计</title>
+      <link href="/2019/05/23/%E5%85%B3%E4%BA%8E%E9%9D%A2%E8%AF%95%E4%B8%AD%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1/"/>
+      <url>/2019/05/23/%E5%85%B3%E4%BA%8E%E9%9D%A2%E8%AF%95%E4%B8%AD%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1/</url>
+      
+        <content type="html"><![CDATA[<p><img src="/2019/05/23/关于面试中系统设计/interview.png" alt="post-cover"><br>很多情况下面试会遇到关于系统设计问题.</p><p>需要注意一下几点:</p><ol><li>切勿立即深入设计或者过度设计</li><li>在条件不明的情况下, 不要立马开始设计, 与面试官详细了解业务需求等等</li><li>切勿立马提出框架等具体应用层</li><li>最好有过真实的设计</li></ol>]]></content>
+      
+      
+      <categories>
+          
+          <category> Back-End </category>
+          
+      </categories>
+      
+      
+        <tags>
+            
+            <tag> 面试 </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+    
+    <entry>
+      <title>笔记: MysqlInnoDB 缓冲池详解</title>
+      <link href="/2019/05/22/%E7%AC%94%E8%AE%B0-Mysql%E7%BC%93%E5%AD%98%E8%AF%A6%E8%A7%A3/"/>
+      <url>/2019/05/22/%E7%AC%94%E8%AE%B0-Mysql%E7%BC%93%E5%AD%98%E8%AF%A6%E8%A7%A3/</url>
+      
+        <content type="html"><![CDATA[<p>InnoDB存储是基于磁盘存储的, 并且将其中记录按页的方式进行管理(InnoDB中数据最小单位是页)<br>为了弥补CPU与磁盘之间速度的鸿沟, 引入了缓冲池来提高数据写入的性能</p><a id="more"></a><h3 id="缓冲池是一个什么样的存在"><a href="#缓冲池是一个什么样的存在" class="headerlink" title="缓冲池是一个什么样的存在"></a>缓冲池是一个什么样的存在</h3><ol><li><p>当读取数据的时候, 首先将磁盘的读取到的数据页存储到缓冲池中. 这个过程叫”Fix”到缓冲池<br>当下一次再读取该页的时候, 判断是否在缓冲池中, 若缓存命中, 则直接读取该页, 否则读取磁盘</p></li><li><p>当对数据库中的页进行修改的时候, 首先修改在缓冲池的页. 然后再以一定的频率刷新到磁盘上.<br>此处频率不是事实, 而是通过<code>redo-log</code>的<code>checkpoint</code>机制来进行控制</p></li></ol><p>所以缓冲池的大小影响着数据库的整体性能. 在32位系统下, 最多为3G, 但是可以通过打开操作系统的PAE选项来获得32位操作系统下最大<br>64G的内存支持. 推荐64位, 最多512G内存</p><p>设置缓存池大小:</p><blockquote><p>innodb_buffer_pool_size=16105127360</p></blockquote><h3 id="缓冲池的数据"><a href="#缓冲池的数据" class="headerlink" title="缓冲池的数据"></a>缓冲池的数据</h3><p>在缓冲池中, 保存着例如: 索引页, 数据页, undo页, 插入缓冲, 自适应哈希索引, 锁信息, 数据字典信息等<br>索引页和数据页占了其中很大一部分</p><p><img src="/2019/05/22/笔记-Mysql缓存详解/mysql.JPG" alt="mysql缓冲"></p><p>缓冲池可配备多个实例:</p><blockquote><p>innodb_buffer_pool_instances=1</p></blockquote><p>默认为1. 设置大于一便可得到多个缓冲区</p><p>那么既然作为缓存, 那么肯定牵涉到热点数据以及LRU等一系列问题. 如何判断数据是否热点, 缓冲池如何管理数据?</p><h3 id="1-LRU-List-Free-List-和-Flush-List"><a href="#1-LRU-List-Free-List-和-Flush-List" class="headerlink" title="1. LRU List, Free List 和 Flush List"></a>1. LRU List, Free List 和 Flush List</h3><h4 id="1-1-LRU-List"><a href="#1-1-LRU-List" class="headerlink" title="1.1 LRU List"></a>1.1 LRU List</h4><p>和传统缓存一样, InnoDB也是通过LRU算法来对数据进行管理.<br>在LRU List中, 使用次数多的数据再列表的前端, 反之则在末端. 当缓冲池不能存放新的数据的时候, 首先释放末尾页</p><p><code>在InnoDB中, 页的默认大小为16K</code></p><p>当缓冲池往里插入新的数据的时候, 并不是直接将数据放入到首或尾, 在这里InnoDB引入了一个<code>midpoint</code>的概念.</p><blockquote><p>innodb_old_block_pct=37 (%)<br>在InnoDB中, 将midpoint之后的数据成为old, 之前称之为new列表, 在new列表中的数被成为<strong>最</strong>热点数据</p></blockquote><p>当插入新的数据的时候, 会默认将数据插入到列表37%的位置. 也就是差不多3/8的位置.<br>为什么不讲读取到的页直接放入到LRU列表首位呢?<br>问题在于某些SQL操作做, 可能会使缓冲池的页被刷新出.<br>比如一个查询操作中, 某些页仅仅只在这次查询中需要被用到. 而如果将查询到页放到首位, 则很有可能将真正热点的数据给挤出<br>热点数据范围.  而当下一次需要读取热点页的时候, 又要重新从磁盘获取.<br>采用midpoint仅仅只是从概率上降低了这种概率, 而不是完全规避.</p><p>在InnoDB中, 还同时引入了另一个参数来管理里LRU列表</p><blockquote><p>innodb_old_blocs_time=1000 (second)</p></blockquote><p> 用于表示页读取到mid位置后需要等待多久才会被加入LRU列表的热端数据. 也就是说<br> 当一个数据被插入之后, 需要存活多久才能去最热点数据端. 从而尽可能的使热点数据不被刷出LRU列表<br>当页从LRU 列表的old部分加入到new部分时, 这个操作称为 <code>page made young</code>, 而如果因为innodb_old_blocks_time的配置导致页没有<br>从old-&gt;new, 这个部分操作称为<code>page not made young</code>. 可以通过 <code>SHOW ENGINE INNODB STATUS</code> 来进行观察</p><p>在InnoDB1.0.x版本开始支持压缩页的功能, 如我们先前所知, 默认页大小为16K 压缩到1K,2K,4K和8K而由于页的大小发生变化, LRU了列表也有了<br>一些变化. 通过<code>unzip_LRU</code>来进行管理这些压缩页, 不同大小的页对应不同的unzip_LRU.<br>而不到16K的页申请内存过程如下:</p><ol><li>检查4KB的unzip_LRU列表, 检查是否有空闲页</li><li>若有, 直接使用</li><li>若无, 检查8KB的unzip_LRU列表</li><li>若能够得到空闲页, 将页分成2个4KB页, 存放到4KB的unzip_LRU列表;</li><li>若无法申请到空闲页, 则直接向LRU列表申请一个16KB的页, 将页分为1个8KB和2个4KB, 分别存储到对应的unzip_LRU列表中</li></ol><h4 id="1-2-Free-List"><a href="#1-2-Free-List" class="headerlink" title="1.2 Free List"></a>1.2 Free List</h4><p>当Mysql启动的时候, LRU List 是没有任何数据的,LRU List 是管理已经读取的页. 这时候所有的页是存在于Free List中. 当下需要从缓冲池中分也是, 首先从FreeList中查找是否有<br>空闲页. , 若有则将该页从Free List中删除, 放入到LRU列表中. 否则从LRU old部分淘汰末尾页, 将内存空间分配给新页</p><h4 id="1-3-Flush-List"><a href="#1-3-Flush-List" class="headerlink" title="1.3 Flush List"></a>1.3 Flush List</h4><p>如我们开头所讲的. 任何SQL操作都是优先在缓冲区或者将数据读到缓冲区进行页的更改, LRU列表中的页被修改之后, 称为脏页(Dirty Page)<br>这时候数据库会通过<code>CHECKPOINT</code>机制来将脏页刷回磁盘, 而Flush List中则存储着所有的脏页数据. <strong>* 脏页同时存在于LRU List 和 Flush List当中. *</strong></p><h3 id="2-redo-log-缓冲"><a href="#2-redo-log-缓冲" class="headerlink" title="2. redo-log  缓冲"></a>2. redo-log  缓冲</h3><p>redo-log 又叫重做日志. InnoDB现将重做日志缓存在缓冲池中, 再将其内容刷到磁盘日志文件.</p><blockquote><p>innodb_log_buffer_size<br>一般大小8M即可.因为下一秒这些数据就刷新到日志文件</p></blockquote><p>日志文件更新条件:</p><blockquote><ol><li>主线程定时每秒将redo刷到日志文件</li><li>事务提交时</li><li>当redo-log 缓冲池剩余空间小于1/2时</li></ol></blockquote><h3 id="3-additional-memory-pool"><a href="#3-additional-memory-pool" class="headerlink" title="3. additional memory pool"></a>3. additional memory pool</h3><p>这些是 缓冲池存储例如 LRU 锁 等待等信息的时候 申请内存空间的地方.</p><h3 id="4-CheckPoint"><a href="#4-CheckPoint" class="headerlink" title="4. CheckPoint"></a>4. CheckPoint</h3><p>之前说到了几个地方都是基于CheckPoint来进行操作. 其实CheckPoint就和游戏中的检查点一样.<br>试想, 由于事务数据库都采用了<code>Write Ahead Log</code> 来保证ACID中的D(Durability)持久性.<br>我们假设:</p><blockquote><ol><li>缓冲池可以缓存数据库中的所有数据</li><li>重做日志可以无限增大</li></ol></blockquote><p>缓存池既然可以存入所有数据, 那么就可以不用写入磁盘. 那么每当数据库进行事务提交的时候, redo日志页随之更新<br>日积月累, 这个日志将会愈加庞大. 当数据库真正需要恢复的时候, 数据库根据redo日志将数据恢复到缓冲池中, 这个代价是相当巨大的. </p><p>现实明显不可能如此. 那么就像保存游戏一样, 只要之前的数据已经确确实实的保存到磁盘中, 游戏进度进行保存之后, 后续出现的问题我们都从最后一次的<br>checkpoint开始<br>CheckPoint解决了一下问题:</p><blockquote><ol><li>缩短数据库的恢复时间</li><li>缓冲池不够用时, 将脏页刷新到磁盘.</li><li>重做日志不可用时, 刷新脏页</li></ol></blockquote><p>这里解释一下第三点, 什么是重做日志不可用?<br>重做日志出现不可用的情况是事务数据库系统对于重做日志的设计都是循环使用的, 并不是让其无限增大的. 重做日志可以被重用的部分是指这些重做日志已经不再需要, 即数据库宕机时<br>不需要这部分日志来来进行恢复. 因此这部分日志就可以被覆盖重用. 若此时重做日志还需要被使用, 那么必须强制产生CheckPoint, 将缓冲池的页至少刷新到当前重做日志的位置.</p><p>在InnoDB内部, CheckPoint有两种:</p><ul><li>Sharp CheckPoint</li><li>Fuzzy CheckPoint</li></ul><p><code>Sharp CheckPoint</code> 发生在数据库关闭时, 将所有的脏页都刷回磁盘, 这是默认工作<br><code>Fuzzy CheckPoint</code> 发生在InnoDB运行时, 只刷一部分脏页回磁盘, 否则每次都全部刷新I/O资源开销会非常巨大<br>在这其中可能会发生以下几种<code>Fuzzy CheckPoint</code>:</p><ul><li>Master Thread</li><li>FLUSH_LRU_LIST</li><li>Async/Sync Flush</li><li>Dirty Page too much</li></ul><p><code>Master Thread</code>发生的CP 可以理解为一个定时任务, 固定的将一部分脏页刷回磁盘, 这是个异步操作<br><code>FLUSH_LRU_LIST</code> 是因为InnoDB保证LRU列表中需要有差不多100个空闲页使用. <code>Page Cleaner</code>线程会异步的检查LRU中是否存在足够的可用页<br>而如果空间不够, 则进行FLUSH_LRU_LIST CheckPoint<br><code>Async/Sync Flush</code> 是指发生在redo日志不可用的情况下, 需要强制将一些页刷回磁盘.此时脏页是从脏页列表中获取的(Flush List). 写入重写的日志的记为<code>redo_lsn</code><br>而已经舒心回磁盘记为<code>checkpoint_lsn</code><br><code>Dirty Page too much</code> 则是脏页太多进行的强制刷新, 利用参数<code>innodb_max_dirty_pages_pct</code>进行控制</p><blockquote><p>innodb_max_dirty_pages_pct=80 (%)</p></blockquote>]]></content>
+      
+      
+      <categories>
+          
+          <category> Code </category>
+          
+      </categories>
+      
+      
+        <tags>
+            
+            <tag> Mysql </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+    
+    <entry>
+      <title>Nginx 高负载优化(转述自知乎, 笔记)</title>
+      <link href="/2019/05/19/Nginx-%E9%AB%98%E8%B4%9F%E8%BD%BD%E4%BC%98%E5%8C%96/"/>
+      <url>/2019/05/19/Nginx-%E9%AB%98%E8%B4%9F%E8%BD%BD%E4%BC%98%E5%8C%96/</url>
+      
+        <content type="html"><![CDATA[<p>出处: <a href="https://zhuanlan.zhihu.com/p/49415781" target="_blank" rel="noopener">知乎原文-Nginx百万优化</a><br>此处为笔记向</p><h3 id="1-方法论"><a href="#1-方法论" class="headerlink" title="1. 方法论"></a>1. 方法论</h3><ul><li>保持并发了连接数, 做到内存有效应用</li><li>高并发的同时保持高吞吐量</li></ul><a id="more"></a><p>高并发问题分解<br><img src="/2019/05/19/Nginx-高负载优化/nginx.jpg" alt="问题分解"></p><p>优化从三个方面优化. 应用, 框架, 内核<br><img src="/2019/05/19/Nginx-高负载优化/nginx2.jpg" alt="优化方向"></p><h3 id="2-硬件"><a href="#2-硬件" class="headerlink" title="2. 硬件"></a>2. 硬件</h3><p><img src="/2019/05/19/Nginx-高负载优化/nginx4.jpg" alt="硬件"></p><h3 id="3-软件"><a href="#3-软件" class="headerlink" title="3. 软件"></a>3. 软件</h3><p><img src="/2019/05/19/Nginx-高负载优化/nginx3.jpg" alt="软件"></p><h3 id="4-请求"><a href="#4-请求" class="headerlink" title="4. 请求"></a>4. 请求</h3><pre><code>Nginx 模块结构</code></pre><p><img src="/2019/05/19/Nginx-高负载优化/nginx5.jpg" alt="Nginx模块"></p><h4 id="4-1-请求到来"><a href="#4-1-请求到来" class="headerlink" title="4.1 请求到来"></a>4.1 请求到来</h4><p>一个请求到来的时候,操作系统内核中有一个队列, 系统进程会对其进行调用. 由于有很多工作进程, 谁去调用是个问题. <strong>负载均衡策略</strong></p><p>现在有一个时间模块, 调用了<code>epoll wait</code>接口, <code>accept</code>建立好一个新的连接, 这时会分配到连接内存池, 这个内存池会在连接刚创建的时候分配, 而当连接关闭的时候进行释放</p><p>连接进入之后, 接下来就来到了Nginx模块, 这时候会加一个<code>定时器</code>, 60s, 建立好连接后60s没有收到客户端的信息就自动关闭; 如果60s过来之后就去分配内存, 读缓冲区.</p><p>操作系统内核收到请求后, 但是用于应用程序是处理不聊的, 因为现在还只是存在內核态内存, 没有读取到用户态内存. 所以这时候要内存分配, 从连接内存池这里分配. 大概1K内存</p><p><img src="/2019/05/19/Nginx-高负载优化/nginx6.jpg" alt="接受请求时间模块"></p><h4 id="4-2-接受请求"><a href="#4-2-接受请求" class="headerlink" title="4.2 接受请求"></a>4.2 接受请求</h4><p>当收到请求之后, 接受<code>url</code>和<code>header</code>, 分配请求内存池, 这时候 request pool size 是4K.这个和刚才有差不多8倍差距:</p><blockquote><p>当请求特别长时, 就会分配更大的, 刚刚1K不够用了, 不会一次性分配32K, 而是一次性分配8K, 如果8K以后还是不能解析到刚才的标识符, 就会分配第二个8K.</p></blockquote><p>之前收到的所有东西都不会释放, 只是放一个指针, 放到url或者指到协议, 标识它有多长即可.</p><p>接下来解决header, 这个流程一模一样的没有什么区别，这时候还会有一个不够用的情况，当我接收完所有的header以后，会把刚刚的定时器给移除，移除后接下来做11个阶段的处理，也就是说刚刚所有的外部服务器都是通过很多的模块串成在一起处理一个请求的。</p><p><img src="/2019/05/19/Nginx-高负载优化/nginx7.jpg" alt="接收http请求模块"></p><p>上图有个疑问: <strong>11个阶段的http请求处理</strong></p><blockquote><p>刚刚读完header需要处理, 所以这时候第一阶段是<code>post-read</code>. 接下来会有<code>rewrite</code>, 还有<code>access</code>和<code>preaccess</code></p></blockquote><p><img src="/2019/05/19/Nginx-高负载优化/nginx8.jpg" alt="11阶段"></p><h3 id="5-应用层优化"><a href="#5-应用层优化" class="headerlink" title="5. 应用层优化"></a>5. 应用层优化</h3><h4 id="5-1-协议"><a href="#5-1-协议" class="headerlink" title="5.1 协议"></a>5.1 协议</h4><p>做应用层的优化先看协议层有什么可以优化的, 比如说编码方式, header每次都会去传用Nginx的架构,以至于浪费了很多的流量, 我们可以改善http2, 有很多这样的协议会大幅度提升它的性能</p><p>而如果你改善HTTP2, 则会带来其他问题, 比如http2必须走这条路. 这条路线又是一个很大的话题, 它涉及到安全性和性能, 是互相冲突的东西</p><p><img src="/2019/05/19/Nginx-高负载优化/nginx9.jpg" alt="协议优化"></p><h4 id="5-2-压缩"><a href="#5-2-压缩" class="headerlink" title="5.2 压缩"></a>5.2 压缩</h4><p>我们希望”商”越大越好, 压缩这里会有一个重点提出来的: 动态和静态. 比如我们用了拷贝, 比如说从磁盘中直接由内核来发给网卡, 但一旦压缩的话, 就不得不先把文件读到nginx, 交给后面的极内核去做一下处理.</p><p>keepalive长连接也是一样的, 涉及到很多东西, 简单来看也是复用连接. 因为连接有一个慢启动的过程, 一开始他的窗口是比较小, 一次可能只传送很小的1K, 但后面可能会传送几十K, 所以你每次新建连接它都会重新开始. 非常慢.<br>这里还涉及到一个问题, 因为nginx内核默认打开了一个连接空闲的时候, 长连接产生的作用也会下降.</p><h4 id="5-3-提高内存使用率"><a href="#5-3-提高内存使用率" class="headerlink" title="5.3 提高内存使用率"></a>5.3 提高内存使用率</h4><p>CPU通过缓存区来取出储存上东西的时候, 是一批一批取得, 每一批目前是64bytes, 所以默认的是8K, 如果你配了32, 会给你上升到64, 如果配了65 会上升到128, 因此它是一个一个序列化重组的, 所以了解这个东西以后再配的时候就不会再犯问题,.<br><img src="/2019/05/19/Nginx-高负载优化/nginx10.jpg" alt="内存使用率"></p><h4 id="5-4-限速"><a href="#5-4-限速" class="headerlink" title="5.4 限速"></a>5.4 限速</h4><p>限流到底在限什么? 最主要限在Nginx向客户端发送响应的速度.<br><img src="/2019/05/19/Nginx-高负载优化/nginx11.jpg" alt="限流"></p><h4 id="5-5-Worker间负载均衡"><a href="#5-5-Worker间负载均衡" class="headerlink" title="5.5 Worker间负载均衡"></a>5.5 Worker间负载均衡</h4><p><img src="/2019/05/19/Nginx-高负载优化/nginx12.jpg" alt="worker负载均衡"></p><h4 id="5-6-超时"><a href="#5-6-超时" class="headerlink" title="5.6 超时"></a>5.6 超时</h4><h4 id="5-7-缓存"><a href="#5-7-缓存" class="headerlink" title="5.7 缓存"></a>5.7 缓存</h4><h4 id="5-8-减少磁盘IO"><a href="#5-8-减少磁盘IO" class="headerlink" title="5.8 减少磁盘IO"></a>5.8 减少磁盘IO</h4><p>优化读取，Sendfile零拷贝、内存盘、SSD盘。减少写入，AIO，磁盘是远大于内存的，当它把你内存消化完的时候还会退化成一个调用。像thread pool只用读文件，当退化成这种模式变多线程可以防止它的主进程被阻塞住，这时候官方的博客上说是有9倍的性能提升。</p><p><img src="/2019/05/19/Nginx-高负载优化/nginx13.jpg" alt="减少磁盘IO"></p><h3 id="6-系统优化"><a href="#6-系统优化" class="headerlink" title="6. 系统优化"></a>6. 系统优化</h3>]]></content>
+      
+      
+      <categories>
+          
+          <category> Notes </category>
+          
+      </categories>
+      
+      
+        <tags>
+            
+            <tag> 后端 </tag>
+            
+            <tag> 高并发 </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+    
+    <entry>
+      <title>再见了,The Big Bang</title>
+      <link href="/2019/05/18/%E5%86%8D%E8%A7%81%E4%BA%86-The-Big-Bang/"/>
+      <url>/2019/05/18/%E5%86%8D%E8%A7%81%E4%BA%86-The-Big-Bang/</url>
+      
+        <content type="html"><![CDATA[<p>Thanks words in Nobel Prize by Dr. Sheldon Lee Cooper:</p><p>Thank you Dr. Fellower.<br>I have a very long and somewhat self-centered speech here.<br>But I’d like to set it aside.<br>Because this honor doesn’t just belong to me.</p><a id="more"></a><p>I wouldn’t be up here if it weren’t for some very important people in my life.<br>Beginning with my mother, father, meemaw, brother and sister.<br>And my other family who I’m so happy to have here with us.<br>I was under a misapprehension that my accomplishments were mine alone.<br>Nothing to be further from the truth.<br>I have ben encouraged, sustained, inspired and tolerated not only by my wife, but by the greatest group of friends anyone ever had.<br>I’d like to ask them to stand.<br>Dr. Rajesh Koothrappali.<br>Dr. Bernadeette Rostenkowsi Wolowitz.<br>Astronaut Howard Wolowitz.<br>And my two dearest friends in the world,<br>Penny Hofstadter<br>and<br>Dr. Leonard Hofstadter.<br>I was there the moment Leonard and Penny met.<br>He said to me that their babies would smart and beautiful.<br>And now that they’re expecting, I have no doubt that that will be the case.</p><p>Howard, Bernadette,Raj, Penny, Leonard,<br>I apologize if I haven’t been the friend you deserve.<br>But I want you to know in my way, I love you all. And I love you.<br>Thank you.</p><p>2007年到2019年, 12年时间. 没有TBB一直陪伴着.<br>曾经的, 过去的, 都开始要离去了.<br>钢铁侠老了, 谢耳朵老了.</p><p>再见了.<br><img src="/2019/05/18/再见了-The-Big-Bang/1.png" alt="post-cover"><br><img src="/2019/05/18/再见了-The-Big-Bang/1.png" alt="TBB"></p><iframe height="500" width="750" src="//player.bilibili.com/player.html?aid=52894255&cid=92551322&page=1" scrolling="no" border="0" frameborder="no" framespacing="0" allowfullscreen="true"> </iframe>]]></content>
+      
+      
+      <categories>
+          
+          <category> Life </category>
+          
+      </categories>
+      
+      
+        <tags>
+            
+            <tag> 怀念 </tag>
+            
+            <tag> Video </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+    
+    <entry>
+      <title>视频测试: B站视频</title>
+      <link href="/2019/05/18/%E8%A7%86%E9%A2%91%E6%B5%8B%E8%AF%95-B%E7%AB%99%E8%A7%86%E9%A2%91/"/>
+      <url>/2019/05/18/%E8%A7%86%E9%A2%91%E6%B5%8B%E8%AF%95-B%E7%AB%99%E8%A7%86%E9%A2%91/</url>
+      
+        <content type="html"><![CDATA[<p><img src="/2019/05/18/视频测试-B站视频/1.png" alt="post-cover"></p><a id="more"></a><!-- <iframe src="//player.bilibili.com/player.html?aid=49052409&cid=85911719&page=7" height=360 width='100%' scrolling="no" border="0" frameborder="no" framespacing="0" allowfullscreen='true'><iframe> --><!-- <iframe src="//player.bilibili.com/player.html?aid=49052409&cid=85911719&page=7" height=360 width='100%' controls="controls" allowfullscreen></iframe> --><div class="aspect-ratio"><iframe src="//player.bilibili.com/player.html?aid=49052409&cid=85911719&page=7" scrolling="no" border="0" frameborder="no" framespacing="0" allowfullscreen="true"></iframe></div>]]></content>
+      
+      
+      <categories>
+          
+          <category> Bili-Bili </category>
+          
+      </categories>
+      
+      
+        <tags>
+            
+            <tag> Video </tag>
+            
+            <tag> Bilibili </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+    
+    <entry>
+      <title>Java-送分题之Map</title>
+      <link href="/2019/05/17/JAVA-%E9%80%81%E5%88%86%E9%A2%98%E4%B9%8BMap/"/>
+      <url>/2019/05/17/JAVA-%E9%80%81%E5%88%86%E9%A2%98%E4%B9%8BMap/</url>
+      
+        <content type="html"><![CDATA[<p>Map的一些相关问题可以说是面试官最喜欢的问题了. 那么我们就系统性的说说这个问题</p><h3 id="常用实现类"><a href="#常用实现类" class="headerlink" title="常用实现类"></a>常用实现类</h3><ul><li>HashTable</li><li>HashMap</li><li>WeakHashMap</li><li>LinkedHashMap</li><li>ConcurrentHashMap</li><li>TreeMap</li></ul><a id="more"></a><h3 id="特点及使用目的"><a href="#特点及使用目的" class="headerlink" title="特点及使用目的"></a>特点及使用目的</h3><ul><li>HashTable<br>  线程安全, 目前基本已经舍弃不使用</li><li>HashMap<br>  线程不安全, 大量使用, 存储速度快, 查找速度快,常用于线程安全的线程中做中间变量</li><li>WeakHashMap<br>  继承以上HashMap的所有优缺点, 多了一个特性: <strong><em>其KV对象Entry,会在其Key中只有Map本身引用的时候进行删除</em></strong></li><li>LinkedHashMap<br>  基于HashMap进行数据存储实现, 并在每个元素中加入了链表属性来维持其元素的顺序性</li><li>ConcurrentHashMap<br>  基于HashMap存储结构, 保证了线程安全</li><li>TreeMap<br>  基于红黑树实现的Map, 并且有序</li></ul><h3 id="实现方式"><a href="#实现方式" class="headerlink" title="实现方式"></a>实现方式</h3><p>由于TreeMap的实现方式比较特殊, 所以我们先从<code>Hash</code>开始讲起</p><h4 id="1-Map-depend-on-hash"><a href="#1-Map-depend-on-hash" class="headerlink" title="1. Map depend on hash"></a>1. Map depend on <code>hash</code></h4><p>首先我们要理解一下<code>Map</code>是什么, Map在这里的意思不是说地图, 指的是映射. 众所周知, Map是KV键值对, Map里面主要解决的就是如何将K正确的指向V<br>在我们的日常操作中的数据都是杂乱无章的, 甚至是没有规则的, 那么通过一定的方式将无章法的, 无规则的东西变成和章法,在一定范围或者规则内, 且便于操作的目标或者值, 这个过程就叫<code>hash</code></p><p>比如我们常说的对数字取模.</p><blockquote><p>我们有无穷多个数, 但是通过对某个数字n取模, 我们就会得到固定范围的0~n-1的数字.</p></blockquote><blockquote><p>所以, 对于数据分布足够宽, 足够平均分布的时候, 我们利用Hash实现的Map会得到最高性能的查询.</p></blockquote><p>如果有疑问, 往下面看:<br>在所有数据结构中, 我们知道在已知下标的情况下, 数组的查询速度是最快的. 复杂度为O(1)<br>那么先定个目标, 我们采用数组来实现KV Map<br><img src="/2019/05/17/JAVA-送分题之Map/1.png" alt="图1"></p><p>那么问题来了: <strong><em>如何使得K能直接查找到V, 也就是如何通过Key来对应到其对应值的下标呢?</em></strong><br><img src="/2019/05/17/JAVA-送分题之Map/2.png" alt="图2"></p><p>假设我们的Key都是整数, 那么我们此时,数组长度为7, 那么为了得到一个0~6范围内的正整数, 我们对key进行一个hash, 即:</p><blockquote><p>hash = k % 7<br>那么此时我们通过hash值就可以得到其对应位置, 并将数值存入到对应的数组位置当中</p></blockquote><p><img src="/2019/05/17/JAVA-送分题之Map/3.png" alt="图3"><br>到这一步, 我们基于Hash的Map已经形成雏形</p><p>但是又一个新的问题诞生了:<strong><em>此时如果再来一个新元素K8 V8 如何插入?</em></strong><br>此处我们默认K8的值等于7. 那么按照我们之前的hash规则, 则会得到hash=0, 但是下标为0的位置已经有元素V0 的存在, 此处产生了<strong><em>hash冲突</em></strong>, 即K不同,<br>但是取得的hash值是相同的<br>我们需要一个额外的方法来存储哈希冲突的问题,此处就引入一个数据结构<code>链表</code>, 将发生hash冲突的值和已经存在的值相关联<br><img src="/2019/05/17/JAVA-送分题之Map/4.png" alt="图4"><br>问题又来了: <strong><em>值是放进去了, 但是如果我取得时候, 也是通过hash值来获取值, 我怎么知道取哪个呢?</em></strong><br>所以为了解决这个问题, 存的时候, 我们不仅要存储Value, 还要将Key给存储进去, 那么当遇到有链表的值得时候. 就遍历链表, 拿Key值去进行equals比较. 保证拿出<br>的值是正确的.<br><img src="/2019/05/17/JAVA-送分题之Map/5.png" alt="图5"><br>到这一步. 基本上正确的存数据于取数据就没有问题了. 但是由此也因为hash冲突的问题诞生了另一个问题:</p><blockquote><p>如果这样不停的塞值. 比如从0~100000, 这样每个链表就越来越长越来越长, 以至于当我们随机一个key取值得时候, 基本都是在遍历链表. 这样就已经让我们失去数组快速查找的优势了.<br>我们需要一个解决方案, 来解决hash冲突, 避免这样长链表的诞生. 从这里我们就开始讲Java的解决方案<br>首先, 想要hash数值足够宽. 那么对于前面的<code>k % length</code>这个公式, 我们势必就是要扩大分母, 也就是对数组进行扩容.<br>但是何时扩容?<br>Java引进了一个负载因子的概念<code>DEFAULT_LOAD_FACTOR</code>:</p></blockquote><figure class="highlight java hljs"><table><tr><td class="code"><pre><span class="line"><span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> <span class="hljs-keyword">float</span> DEFAULT_LOAD_FACTOR = <span class="hljs-number">0.75f</span>;</span><br></pre></td></tr></table></figure><blockquote><p>当数组中存在元素个数的个数达到<code>数组长度*0.75f</code>的时候, 开始对数组进行扩容</p></blockquote><p>但是若数组长度并没有达到负载因子的长度的时候, 发生了严重的hash冲突, 也势必会产生非常严重的哈希冲突导致遍历大链表的情况发生.<br>于是针对于这种情况(JDK1.7 实现方式), 在JDK1.8中, 当链表元素达到8的时候, 则会将链表结构改成<code>红黑树</code>. 利用红黑树的自我平衡特点来加快元素的查找,<br>避免大链表的产生</p><blockquote><p>关于红黑树的特性, 可以通过 <a href="https://www.cs.usfca.edu/~galles/visualization/RedBlack.html" target="_blank" rel="noopener">红黑树在线演示</a> 来了解其特性</p></blockquote><p>正常状态下HashMap结构图<br><img src="/2019/05/17/JAVA-送分题之Map/6.png" alt="图6"></p><p>那么每次扩容, 扩容多少呢. 在JDK1.8 中, 每次扩容的长度都固定是2的n次幂, 为什么选这个数呢?</p><blockquote><p>hash % $ 2^n $等价于 hash &amp; $ 2^n - 1$(与运算)</p></blockquote><p>补充:</p><blockquote><p>与运算,和或运算一起无限接近于CPU实际运算的一种运算方式.<br>视为 0 为false 1为true.<br>4 % 2 = 0; 等价于 4 &amp; 2-1<br>即(二进制) 1000 &amp; 0001 = 0000<br>运算过程:<br>位数不足0补足, 对应位进行逻辑计算</p></blockquote><p>所以, 利用这个特性, 加快运算, 从而选择了2的n次幂</p><p>但是由于HashMap并没有引入锁的机制, 所以是线程不安全的, 尤其发生在resize()也就是数组扩容的时候</p><p><strong><em>To Be Continue ….</em></strong></p><hr><p>2019年5月21日更新:</p><p><code>resize()</code>会出现什么问题呢?</p><p>首先我们来理清一下resize()做了哪些事情.</p><p>首先创建一个新的table[], 长度为 $2^n$.<br>然后遍历原有table[]上的元素, 并对其进行rehash, 将原有元素重新附着到新的table上.</p><p>exp</p><blockquote><p>现我们有一个原始长度为2,且有数据存在的hashmap. 并且有两个线程A与B欲对其进行操作<br><img src="/2019/05/17/JAVA-送分题之Map/7.png" alt="EXP"></p></blockquote>]]></content>
+      
+      
+      <categories>
+          
+          <category> Code </category>
+          
+      </categories>
+      
+      
+        <tags>
+            
+            <tag> Java </tag>
+            
+            <tag> 送分题 </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+    
+    <entry>
+      <title>MSI IG止步4强</title>
+      <link href="/2019/05/17/MSI-IG%E6%AD%A2%E6%AD%A54%E5%BC%BA/"/>
+      <url>/2019/05/17/MSI-IG%E6%AD%A2%E6%AD%A54%E5%BC%BA/</url>
+      
+        <content type="html"><![CDATA[<p>很遗憾IG止步了四强.<br>但是同时也暴露出了诸多的问题<br>无论是IG的野辅问题, 还是整体的BP, 最恐怖的还是揭露出了整整6年的时间, 国内的观众嘴脸还是那么丑恶</p><p>当初RNG输在了S8 八强, 开始各种梗; 现在IG倒在了4强, 依然还是那些梗, 只是主角变成了IG.<br>说实话, 这几把比赛, 亦或者是整个这次MSI比赛 Ning的问题真的很大, 各种迷之操作, 这几局梦游的盲僧. 没有带好节奏的雷克赛都间接或者直接的一步步导致了比赛的走向.</p><a id="more"></a><p>辅助Baolan也是, 尤其是最后一把上路那波很有机会的反追, 直接单人开车到对面人群里. 没有硬控, 没有任何反打手段的塔姆直接被秒. 并且还有很多次都是因为打野和辅助的梦游被开团导致的团战.</p><p>从心里上来说真的不想IG输的, 因为IG只要一输, 国内LOL圈子就要热闹了. 比赛还没完全结束就已经开始了各种刷屏嘲讽+玩梗. 各大论坛估计也要开始撕逼了.</p><p>希望IG每个人都能调整心态吧. 任何队伍都要经历这些的, SKT王朝的诞生都经历过一年S赛都进不去. 不要求建立王朝, 只想都问心无愧吧</p><hr><p><strong>期待再一次捧杯</strong><br><img src="/2019/05/17/MSI-IG止步4强/1.jpg" alt="champion"></p>]]></content>
+      
+      
+      <categories>
+          
+          <category> Game </category>
+          
+      </categories>
+      
+      
+        <tags>
+            
+            <tag> LOL </tag>
+            
+            <tag> MSI </tag>
+            
+            <tag> IG </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+    
+    <entry>
+      <title>Java 线程池标准 ThreadPoolExecutor</title>
+      <link href="/2019/05/10/Java-%E7%BA%BF%E7%A8%8B%E6%B1%A0%E6%A0%87%E5%87%86-ThreadPoolExecutor/"/>
+      <url>/2019/05/10/Java-%E7%BA%BF%E7%A8%8B%E6%B1%A0%E6%A0%87%E5%87%86-ThreadPoolExecutor/</url>
+      
+        <content type="html"><![CDATA[<p>面试的时候问了我线程池的问题. 比如说用的哪个类, 里面的参数是怎样的.</p><figure class="highlight java hljs"><table><tr><td class="code"><pre><span class="line">ThreadPoolExecutor pool = <span class="hljs-keyword">new</span> ThreadPoolExecutor(corePoolSize, maximumPoolSize, keepAliveTime, timeUnit, BlockingQueue)</span><br></pre></td></tr></table></figure><a id="more"></a><ul><li><p>corePoolSize: 核心池大小, 也就是核心线程数</p><p>  线程池刚开始启动的时候, 默认为0, 如果当前工作线程数少于该值, 则创建新线程</p></li><li><p>BlockingQueue: 工作队列<br>  若在添加新任务的时候, 线程池worker线程已经达到了corePoolSize的值,则将新任务放入workQueue当中等待</p></li><li><p>maximumPoolSize: 最大池大小, 也就是最大线程数<br>  若BlockingQueue被沾满, 则判断该值申请新的线程开始消费workQueue中的任务, 新创线程不超过该值</p></li><li><p>keepAliveTime: 线程存活时间<br>  如果我maximumPoolSize - corePoolSize &gt; 0 的线程中有闲置线程, 则线程在该时间后进行销毁</p></li><li><p>timeUnit: 存活时间的单位</p></li></ul><p>这里还有另外一个参数: <code>handler</code></p><p>我们来看看jdk8中关于Execute()方法的注释</p><pre><code>* Proceed in 3 steps:** 1. If fewer than corePoolSize threads are running, try to* start a new thread with the given command as its first* task.  The call to addWorker atomically checks runState and* workerCount, and so prevents false alarms that would add* threads when it shouldn&apos;t, by returning false.** 2. If a task can be successfully queued, then we still need* to double-check whether we should have added a thread* (because existing ones died since last checking) or that* the pool shut down since entry into this method. So we* recheck state and if necessary roll back the enqueuing if* stopped, or start a new thread if there are none.** 3. If we cannot queue task, then we try to add a new* thread.  If it fails, we know we are shut down or saturated* and so reject the task.*/</code></pre><p>如果当前运行线程数少于corePoolSize数目, 那么就会尝试创建一个新线程来执行任务这里的计算使用了Atom类来保证其运行在状态和count的原子性</p><figure class="highlight java hljs"><table><tr><td class="code"><pre><span class="line"><span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> AtomicInteger ctl = <span class="hljs-keyword">new</span> AtomicInteger(ctlOf(RUNNING, <span class="hljs-number">0</span>));</span><br></pre></td></tr></table></figure><figure class="highlight java hljs"><table><tr><td class="code"><pre><span class="line"><span class="hljs-keyword">int</span> c = ctl.get();</span><br><span class="line">    <span class="hljs-keyword">if</span> (workerCountOf(c) &lt; corePoolSize) &#123;</span><br><span class="line">        <span class="hljs-keyword">if</span> (addWorker(command, <span class="hljs-keyword">true</span>))</span><br><span class="line">            <span class="hljs-keyword">return</span>;</span><br><span class="line">        c = ctl.get();</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure><p>如果不能在在队列中安排task, 则会尝试新增加一个线程来处理新任务. 而如果创建失败, 则会拒绝新任务.</p><p>整体而言线程的工作做流程分为以下步骤:</p><ul><li><p>添加新任务</p></li><li><p>线程核心数没有达到指定数目, 创建新线程</p></li><li><p>达到核心线程数, 安排进Queue中</p></li><li><p>Queue中线程数满, 且核心线程数没有空余, 创建新线程来对Queue进行处理, 以FIFO原则处理</p></li><li><p>若Queue满, 核心线程数满, 最大线程数也满, 如果此时定义了<code>handler</code> 则会以handler中的方法来处理新任务. 否则直接拒绝新任务的加入</p></li></ul>]]></content>
+      
+      
+      <categories>
+          
+          <category> Code </category>
+          
+      </categories>
+      
+      
+        <tags>
+            
+            <tag> 线程池 </tag>
+            
+            <tag> 笔记 </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+    
+    <entry>
+      <title>Netty 再回首</title>
+      <link href="/2019/05/10/Netty-%E5%86%8D%E5%9B%9E%E9%A6%96/"/>
+      <url>/2019/05/10/Netty-%E5%86%8D%E5%9B%9E%E9%A6%96/</url>
+      
+        <content type="html"><![CDATA[<p>之前的工作上用过netty, 但是感觉理解上还是不够深刻, 便再次看了一下netty 模型和源码. 发现自己以前还是too naive</p><p>Netty 到底快在哪<br>Netty 为什么快<br>Netty 与Tomcat等web容器的区别</p><h3 id="Netty的模型"><a href="#Netty的模型" class="headerlink" title="Netty的模型"></a>Netty的模型</h3><p>以前第一次看netty的模型的时候, 以为自己看懂了. 其实并不然.</p><p>每次讨论到Netty模型的时候不可避免的会谈到IO模型的演变.</p><h4 id="什么是I-O"><a href="#什么是I-O" class="headerlink" title="什么是I/O"></a>什么是I/O</h4><a id="more"></a><p>I/O : Output 和 Input. 任何计算机与存储介质或者计算机外界进行数据交换的行为都可以称之为IO操作. 例如文件读取, 网络请求等等. <em>一切的IO操作都是通过操作系统底层函数来实现的</em> 若要了解其底层原理, 需要了解计算机系统</p><p>Java早期版本中,通过流的概念实现了</p><ul><li>磁盘操作: File</li><li>字节操作: InputStream 和 OutputStream</li><li>字符操作: Reader 和 Writer</li><li>网络操作: Socket</li></ul><p><strong><em>流的概念很好理解: 将数据的传输想象成一条河流注入湖泊, 而湖泊就是目标对象</em></strong></p><h4 id="I-O模式"><a href="#I-O模式" class="headerlink" title="I/O模式"></a>I/O模式</h4><ul><li><p>BIO(Blocking I/O)</p><p>  BIO是最早的I/O操作模型, 每一次I/O操作的时候, 例如写入一个文件: CPU将换从中的数据写入到磁盘需要等到写入完毕, 才会去执行下一个工作.</p></li><li><p>AIO(Asynchronous I/O)</p></li></ul><ul><li>NIO(Non-blocking I/O)</li></ul>]]></content>
+      
+      
+      <categories>
+          
+          <category> Code </category>
+          
+      </categories>
+      
+      
+        <tags>
+            
+            <tag> Netty </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+    
+    <entry>
+      <title>2019年5月(截止今天9号)面试的一些问题总结</title>
+      <link href="/2019/05/09/2019%E5%B9%B45%E6%9C%88%E9%9D%A2%E8%AF%95%E7%9A%84%E4%B8%80%E4%BA%9B%E9%97%AE%E9%A2%98%E6%80%BB%E7%BB%93/"/>
+      <url>/2019/05/09/2019%E5%B9%B45%E6%9C%88%E9%9D%A2%E8%AF%95%E7%9A%84%E4%B8%80%E4%BA%9B%E9%97%AE%E9%A2%98%E6%80%BB%E7%BB%93/</url>
+      
+        <content type="html"><![CDATA[<p>最近一直在面试, 因为也算是离开了一段时间吧. 所以面试效果感觉不尽人意对于一些问题进行了一下总结, 都是一些自我感觉没有答的很好的地方</p><h3 id="数据库方面"><a href="#数据库方面" class="headerlink" title="数据库方面"></a>数据库方面</h3><ul><li>谈一下数据库里索引的最左匹配原则</li></ul><h3 id="框架"><a href="#框架" class="headerlink" title="框架"></a>框架</h3><ul><li>springcloud zuul和nginx的区别</li></ul><a id="more"></a><h3 id="解决方案方面"><a href="#解决方案方面" class="headerlink" title="解决方案方面"></a>解决方案方面</h3><ul><li><p>redis 集群中带宽不够了怎么办 (感觉这个问题有点扯)</p></li><li><p>nginx 性能出现瓶颈怎么办</p><p>  对于nginx优化, 比如开启epoll和引入线程池</p><p>  和并请求,增加tcp连接的使用效率</p><p>  加快服务端的请求处理速度</p></li><li><p>有一个非常复杂的导出报表业务, 条件复杂, 且数据可能会发生改动. 怎么让相关人员能够快速的导出报表<br>  核心思想: 预加载</p></li><li><p>使用数据库后, 很快性能出现了瓶颈, 并且服务器出现了假死现象, 怎么解决</p><p>  假死和瓶颈方面很多. 应该从什么假死和什么瓶颈来着手</p></li></ul>]]></content>
+      
+      
+      <categories>
+          
+          <category> Code </category>
+          
+      </categories>
+      
+      
+        <tags>
+            
+            <tag> 面试 </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+  
+  
+</search>
