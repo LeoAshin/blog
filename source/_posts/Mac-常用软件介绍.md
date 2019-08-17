@@ -14,7 +14,7 @@ tags: Mac
 首当其冲的就是社交软件, 各大厂商对于 Mac 的支持已经非常源生了. 例如微信, QQ 等哪怕一些小众的软件
 比如 YY 都有了比较好的支持, 所以有什么需要的软件直接去搜 Mac 版即可
 
-### 1. Alfred
+### Alfred
 
 首先要推荐的就是这款搜索神器 `Alfre` 对于一般用户或者中度用户来说免费版已经能够获得非常好的体验了
 
@@ -34,7 +34,7 @@ tags: Mac
 3.  再者就是对于系统的高度契合,无论是打开 app, 还是运行脚本亦或者是进行快捷计算. 当你熟练之后,
     一切都是那么的容易.
 
-### 2. IINA
+### IINA
 
 多媒体设备,当然少不了多媒体软件的支持, 作为目前 Mac 平台上最好用的播放软件, 不仅大小不超过 100G 更是从 UI 到功能, 都透露着为 Mac 打造的气息, 源生支持 PIP:画中画模式, 并且占用资源非常少.
 
@@ -42,7 +42,7 @@ tags: Mac
 
 > 下载地址 [IINA - The modern media player for MacOS](https://iina.io/)
 
-### 3. iStat Menu
+### iStat Menu
 
 <div align=center>
   <img src="3.png" />
@@ -67,14 +67,14 @@ tags: Mac
 
 但是这个软件的完全版本是属于收费的. 请看左边(利益无关)
 
-### 4. Handshaker
+### Handshaker
 
 曾经, 我为在 Mac 上如何传输 Android 手机文件以及管理操碎了心, 直到我看到了一家我并不喜欢的公司出的产品, 就是介绍的 Handshaker. 综合体验上来说
 可以说是 Mac 上使用最省心的文件管理以及传输软件了. 对于这家公司. 不得不说,只要不是正业的产品线, 做的都挺好的
 
 > 下载地址 [锤子软件 - Handshaker](https://www.smartisan.com/apps/#/handshaker)
 
-### 5. Shadowsocks
+### Shadowsocks
 
 <div align=center>
   <img src="8.png" />
@@ -84,7 +84,7 @@ tags: Mac
 
 ---
 
-### 6. Another Redis Desktop Manager
+### Another Redis Desktop Manager
 
 目前用过的体验最好的 Redis GUI 管理界面, 开源免费, 就是和 [Redis Desktop Manager](https://redisdesktop.com/) 对着干的
 

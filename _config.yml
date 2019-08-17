@@ -5,10 +5,10 @@
 # Site
 title: LeoAshin - Zone
 subtitle: Diary
-description: 记录一些点点滴滴
+description: Record Anything
 keywords:
 author: LeoAshin
-language: zh-CN
+language: en
 timezone: Asia/shanghai
 
 # URL
@@ -18,7 +18,7 @@ root: /
 permalink: :year/:month/:day/:title/
 permalink_defaults:
 
-archive:  1
+archive: 1
 # Directory
 source_dir: source
 public_dir: public
@@ -27,7 +27,7 @@ archive_dir: archives
 category_dir: categories
 code_dir: downloads/code
 i18n_dir: :lang
-skip_render:  
+skip_render:
 
 # Writing
 new_post_name: :title.md # File name of new posts
@@ -44,16 +44,16 @@ highlight:
   line_number: false
   auto_detect: false
   tab_replace: false
-  
+
 # Home page setting
 # path: Root path for your blogs index page. (default = '')
 # per_page: Posts displayed per page. (0 = disable pagination)
 # order_by: Posts order. (Order by date descending by default)
 index_generator:
-  path: ''
+  path: ""
   per_page: 10
   order_by: -date
-  
+
 # Category & Tag
 default_category: uncategorized
 category_map:
@@ -73,7 +73,7 @@ pagination_dir: page
 
 # Extensions
 ## Plugins: https://hexo.io/plugins/
-#plugins: 
+#plugins:
 #- hexo-renderer-mathjax
 ## Themes: https://hexo.io/themes/
 theme: icarus
@@ -85,3 +85,6 @@ deploy:
   repo: leoashin0723@34.92.45.65:~/blog.git
   branch: master
 
+bilibili:
+  width: 100%
+  height: auto
